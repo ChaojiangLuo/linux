@@ -11,10 +11,9 @@
 #include <linux/module.h>
 #include <linux/regmap.h>
 #include <linux/usb/pd.h>
+#include <linux/usb/tcpci.h>
 #include <linux/usb/tcpm.h>
 #include <linux/usb/typec.h>
-
-#include "tcpci.h"
 
 #define PD_ACTIVITY_TIMEOUT_MS				10000
 
@@ -52,7 +51,7 @@ static const struct regmap_range max_tcpci_tcpci_range[] = {
 	regmap_reg_range(0x00, 0x95)
 };
 
-const struct regmap_access_table max_tcpci_tcpci_write_table = {
+static const struct regmap_access_table max_tcpci_tcpci_write_table = {
 	.yes_ranges = max_tcpci_tcpci_range,
 	.n_yes_ranges = ARRAY_SIZE(max_tcpci_tcpci_range),
 };
@@ -493,14 +492,12 @@ unreg_port:
 	return ret;
 }
 
-static int max_tcpci_remove(struct i2c_client *client)
+static void max_tcpci_remove(struct i2c_client *client)
 {
 	struct max_tcpci_chip *chip = i2c_get_clientdata(client);
 
 	if (!IS_ERR_OR_NULL(chip->tcpci))
 		tcpci_unregister_port(chip->tcpci);
-
-	return 0;
 }
 
 static const struct i2c_device_id max_tcpci_id[] = {

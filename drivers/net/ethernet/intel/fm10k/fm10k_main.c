@@ -1595,8 +1595,7 @@ static int fm10k_alloc_q_vector(struct fm10k_intfc *interface,
 		return -ENOMEM;
 
 	/* initialize NAPI */
-	netif_napi_add(interface->netdev, &q_vector->napi,
-		       fm10k_poll, NAPI_POLL_WEIGHT);
+	netif_napi_add(interface->netdev, &q_vector->napi, fm10k_poll);
 
 	/* tie q_vector and interface together */
 	interface->q_vector[v_idx] = q_vector;
@@ -1774,7 +1773,7 @@ static void fm10k_free_q_vectors(struct fm10k_intfc *interface)
 }
 
 /**
- * f10k_reset_msix_capability - reset MSI-X capability
+ * fm10k_reset_msix_capability - reset MSI-X capability
  * @interface: board private structure to initialize
  *
  * Reset the MSI-X capability back to its starting state
@@ -1787,7 +1786,7 @@ static void fm10k_reset_msix_capability(struct fm10k_intfc *interface)
 }
 
 /**
- * f10k_init_msix_capability - configure MSI-X capability
+ * fm10k_init_msix_capability - configure MSI-X capability
  * @interface: board private structure to initialize
  *
  * Attempt to configure the interrupts using the best available

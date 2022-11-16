@@ -38,20 +38,20 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_gpiokeys>;
 
-		power {
+		key-power {
 			label = "Power Button";
 			gpios = <&gpio4 10 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_POWER>;
 		};
 
-		hallsensor {
+		event-hallsensor {
 			label = "Hallsensor";
 			gpios = <&gpio5 15 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESERVED>;
 			linux,input-type = <EV_SW>;
 		};
 
-		frontlight {
+		event-frontlight {
 			label = "Frontlight";
 			gpios = <&gpio4 1 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_DISPLAYTOGGLE>;
@@ -143,10 +143,24 @@
 	pinctrl-0 = <&pinctrl_i2c3>;
 	status = "okay";
 
-	/* TODO: embedded controller at 0x43 */
+	embedded-controller@43 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ec>;
+		compatible = "netronix,ntxec";
+		reg = <0x43>;
+		system-power-controller;
+		interrupts-extended = <&gpio4 11 IRQ_TYPE_EDGE_FALLING>;
+		#pwm-cells = <2>;
+	};
 };
 
 &iomuxc {
+	pinctrl_ec: ecgrp {
+		fsl,pins = <
+			MX50_PAD_CSPI_SS0__GPIO4_11		0x0	/* INT */
+		>;
+	};
+
 	pinctrl_gpiokeys: gpiokeysgrp {
 		fsl,pins = <
 			MX50_PAD_CSPI_MISO__GPIO4_10		0x0

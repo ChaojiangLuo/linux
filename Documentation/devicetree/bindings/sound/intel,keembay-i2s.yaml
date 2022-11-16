@@ -5,7 +5,7 @@
 $id: http://devicetree.org/schemas/sound/intel,keembay-i2s.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: Intel KeemBay I2S Device Tree Bindings
+title: Intel KeemBay I2S
 
 maintainers:
   - Sia, Jee Heng <jee.heng.sia@intel.com>
@@ -81,6 +81,6 @@ examples:
          interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
          clock-names = "osc", "apb_clk";
          clocks = <&scmi_clk KEEM_BAY_PSS_AUX_I2S3>, <&scmi_clk KEEM_BAY_PSS_I2S3>;
-         dmas = <&axi_dma0 29 &axi_dma0 33>;
+         dmas = <&axi_dma0 29>, <&axi_dma0 33>;
          dma-names = "tx", "rx";
      };

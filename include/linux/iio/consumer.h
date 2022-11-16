@@ -13,7 +13,7 @@
 struct iio_dev;
 struct iio_chan_spec;
 struct device;
-struct device_node;
+struct fwnode_handle;
 
 /**
  * struct iio_channel - everything needed for a consumer to use a channel
@@ -99,26 +99,20 @@ void iio_channel_release_all(struct iio_channel *chan);
 struct iio_channel *devm_iio_channel_get_all(struct device *dev);
 
 /**
- * of_iio_channel_get_by_name() - get description of all that is needed to access channel.
- * @np:			Pointer to consumer device tree node
+ * fwnode_iio_channel_get_by_name() - get description of all that is needed to access channel.
+ * @fwnode:		Pointer to consumer Firmware node
  * @consumer_channel:	Unique name to identify the channel on the consumer
  *			side. This typically describes the channels use within
  *			the consumer. E.g. 'battery_voltage'
  */
-#ifdef CONFIG_OF
-struct iio_channel *of_iio_channel_get_by_name(struct device_node *np, const char *name);
-#else
-static inline struct iio_channel *
-of_iio_channel_get_by_name(struct device_node *np, const char *name)
-{
-	return NULL;
-}
-#endif
+struct iio_channel *fwnode_iio_channel_get_by_name(struct fwnode_handle *fwnode,
+						   const char *name);
 
 /**
- * devm_of_iio_channel_get_by_name() - Resource managed version of of_iio_channel_get_by_name().
+ * devm_fwnode_iio_channel_get_by_name() - Resource managed version of
+ *					   fwnode_iio_channel_get_by_name().
  * @dev:		Pointer to consumer device.
- * @np:			Pointer to consumer device tree node
+ * @fwnode:		Pointer to consumer Firmware node
  * @consumer_channel:	Unique name to identify the channel on the consumer
  *			side. This typically describes the channels use within
  *			the consumer. E.g. 'battery_voltage'
@@ -129,9 +123,9 @@ of_iio_channel_get_by_name(struct device_node *np, const char *name)
  * The allocated iio channel is automatically released when the device is
  * unbound.
  */
-struct iio_channel *devm_of_iio_channel_get_by_name(struct device *dev,
-						    struct device_node *np,
-						    const char *consumer_channel);
+struct iio_channel *devm_fwnode_iio_channel_get_by_name(struct device *dev,
+							struct fwnode_handle *fwnode,
+							const char *consumer_channel);
 
 struct iio_cb_buffer;
 /**
@@ -240,6 +234,21 @@ int iio_read_channel_average_raw(struct iio_channel *chan, int *val);
  * do the appropriate transformation.
  */
 int iio_read_channel_processed(struct iio_channel *chan, int *val);
+
+/**
+ * iio_read_channel_processed_scale() - read and scale a processed value
+ * @chan:		The channel being queried.
+ * @val:		Value read back.
+ * @scale:		Scale factor to apply during the conversion
+ *
+ * Returns an error code or 0.
+ *
+ * This function will read a processed value from a channel. This will work
+ * like @iio_read_channel_processed() but also scale with an additional
+ * scale factor while attempting to minimize any precision loss.
+ */
+int iio_read_channel_processed_scale(struct iio_channel *chan, int *val,
+				     unsigned int scale);
 
 /**
  * iio_write_channel_attribute() - Write values to the device attribute.

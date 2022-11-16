@@ -1019,6 +1019,7 @@ static void handle_ahash_resp(struct iproc_reqctx_s *rctx)
  * a SPU response message for an AEAD request. Includes buffers to catch SPU
  * message headers and the response data.
  * @mssg:	mailbox message containing the receive sg
+ * @req:	Crypto API request
  * @rctx:	crypto request context
  * @rx_frag_num: number of scatterlist elements required to hold the
  *		SPU response message
@@ -1927,7 +1928,7 @@ static int ahash_enqueue(struct ahash_request *req)
 	/* SPU2 hardware does not compute hash of zero length data */
 	if ((rctx->is_final == 1) && (rctx->total_todo == 0) &&
 	    (iproc_priv.spu.spu_type == SPU_TYPE_SPU2)) {
-		alg_name = crypto_tfm_alg_name(crypto_ahash_tfm(tfm));
+		alg_name = crypto_ahash_alg_name(tfm);
 		flow_log("Doing %sfinal %s zero-len hash request in software\n",
 			 rctx->is_final ? "" : "non-", alg_name);
 		err = do_shash((unsigned char *)alg_name, req->result,
@@ -2028,7 +2029,7 @@ static int ahash_init(struct ahash_request *req)
 		 * supported by the hardware, we need to handle it in software
 		 * by calling synchronous hash functions.
 		 */
-		alg_name = crypto_tfm_alg_name(crypto_ahash_tfm(tfm));
+		alg_name = crypto_ahash_alg_name(tfm);
 		hash = crypto_alloc_shash(alg_name, 0, 0);
 		if (IS_ERR(hash)) {
 			ret = PTR_ERR(hash);
@@ -2952,9 +2953,9 @@ static int aead_gcm_esp_setkey(struct crypto_aead *cipher,
 
 /**
  * rfc4543_gcm_esp_setkey() - setkey operation for RFC4543 variant of GCM/GMAC.
- * cipher: AEAD structure
- * key:    Key followed by 4 bytes of salt
- * keylen: Length of key plus salt, in bytes
+ * @cipher: AEAD structure
+ * @key:    Key followed by 4 bytes of salt
+ * @keylen: Length of key plus salt, in bytes
  *
  * Extracts salt from key and stores it to be prepended to IV on each request.
  * Digest is always 16 bytes

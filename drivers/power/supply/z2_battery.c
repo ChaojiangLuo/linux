@@ -90,9 +90,6 @@ static void z2_batt_ext_power_changed(struct power_supply *batt_ps)
 static void z2_batt_update(struct z2_charger *charger)
 {
 	int old_status = charger->bat_status;
-	struct z2_battery_info *info;
-
-	info = charger->info;
 
 	mutex_lock(&charger->work_lock);
 
@@ -254,7 +251,7 @@ err:
 	return ret;
 }
 
-static int z2_batt_remove(struct i2c_client *client)
+static void z2_batt_remove(struct i2c_client *client)
 {
 	struct z2_charger *charger = i2c_get_clientdata(client);
 
@@ -266,8 +263,6 @@ static int z2_batt_remove(struct i2c_client *client)
 		free_irq(gpiod_to_irq(charger->charge_gpiod), charger);
 
 	kfree(charger);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM

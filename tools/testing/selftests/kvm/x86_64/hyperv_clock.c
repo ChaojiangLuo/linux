@@ -7,6 +7,7 @@
 #include "test_util.h"
 #include "kvm_util.h"
 #include "processor.h"
+#include "hyperv.h"
 
 struct ms_hyperv_tsc_page {
 	volatile u32 tsc_sequence;
@@ -14,13 +15,6 @@ struct ms_hyperv_tsc_page {
 	volatile u64 tsc_scale;
 	volatile s64 tsc_offset;
 } __packed;
-
-#define HV_X64_MSR_GUEST_OS_ID			0x40000000
-#define HV_X64_MSR_TIME_REF_COUNT		0x40000020
-#define HV_X64_MSR_REFERENCE_TSC		0x40000021
-#define HV_X64_MSR_TSC_FREQUENCY		0x40000022
-#define HV_X64_MSR_REENLIGHTENMENT_CONTROL	0x40000106
-#define HV_X64_MSR_TSC_EMULATION_CONTROL	0x40000107
 
 /* Simplified mul_u64_u64_shr() */
 static inline u64 mul_u64_u64_shr64(u64 a, u64 b)
@@ -50,7 +44,7 @@ static inline void nop_loop(void)
 {
 	int i;
 
-	for (i = 0; i < 1000000; i++)
+	for (i = 0; i < 100000000; i++)
 		asm volatile("nop");
 }
 
@@ -62,12 +56,14 @@ static inline void check_tsc_msr_rdtsc(void)
 	tsc_freq = rdmsr(HV_X64_MSR_TSC_FREQUENCY);
 	GUEST_ASSERT(tsc_freq > 0);
 
-	/* First, check MSR-based clocksource */
+	/* For increased accuracy, take mean rdtsc() before and afrer rdmsr() */
 	r1 = rdtsc();
 	t1 = rdmsr(HV_X64_MSR_TIME_REF_COUNT);
+	r1 = (r1 + rdtsc()) / 2;
 	nop_loop();
 	r2 = rdtsc();
 	t2 = rdmsr(HV_X64_MSR_TIME_REF_COUNT);
+	r2 = (r2 + rdtsc()) / 2;
 
 	GUEST_ASSERT(r2 > r1 && t2 > t1);
 
@@ -80,19 +76,24 @@ static inline void check_tsc_msr_rdtsc(void)
 	GUEST_ASSERT(delta_ns * 100 < (t2 - t1) * 100);
 }
 
+static inline u64 get_tscpage_ts(struct ms_hyperv_tsc_page *tsc_page)
+{
+	return mul_u64_u64_shr64(rdtsc(), tsc_page->tsc_scale) + tsc_page->tsc_offset;
+}
+
 static inline void check_tsc_msr_tsc_page(struct ms_hyperv_tsc_page *tsc_page)
 {
 	u64 r1, r2, t1, t2;
 
 	/* Compare TSC page clocksource with HV_X64_MSR_TIME_REF_COUNT */
-	t1 = mul_u64_u64_shr64(rdtsc(), tsc_page->tsc_scale) + tsc_page->tsc_offset;
+	t1 = get_tscpage_ts(tsc_page);
 	r1 = rdmsr(HV_X64_MSR_TIME_REF_COUNT);
 
 	/* 10 ms tolerance */
 	GUEST_ASSERT(r1 >= t1 && r1 - t1 < 100000);
 	nop_loop();
 
-	t2 = mul_u64_u64_shr64(rdtsc(), tsc_page->tsc_scale) + tsc_page->tsc_offset;
+	t2 = get_tscpage_ts(tsc_page);
 	r2 = rdmsr(HV_X64_MSR_TIME_REF_COUNT);
 	GUEST_ASSERT(r2 >= t1 && r2 - t2 < 100000);
 }
@@ -130,7 +131,11 @@ static void guest_main(struct ms_hyperv_tsc_page *tsc_page, vm_paddr_t tsc_page_
 
 	tsc_offset = tsc_page->tsc_offset;
 	/* Call KVM_SET_CLOCK from userspace, check that TSC page was updated */
+
 	GUEST_SYNC(7);
+	/* Sanity check TSC page timestamp, it should be close to 0 */
+	GUEST_ASSERT(get_tscpage_ts(tsc_page) < 100000);
+
 	GUEST_ASSERT(tsc_page->tsc_offset != tsc_offset);
 
 	nop_loop();
@@ -168,22 +173,22 @@ static void guest_main(struct ms_hyperv_tsc_page *tsc_page, vm_paddr_t tsc_page_
 	GUEST_DONE();
 }
 
-#define VCPU_ID 0
-
-static void host_check_tsc_msr_rdtsc(struct kvm_vm *vm)
+static void host_check_tsc_msr_rdtsc(struct kvm_vcpu *vcpu)
 {
 	u64 tsc_freq, r1, r2, t1, t2;
 	s64 delta_ns;
 
-	tsc_freq = vcpu_get_msr(vm, VCPU_ID, HV_X64_MSR_TSC_FREQUENCY);
+	tsc_freq = vcpu_get_msr(vcpu, HV_X64_MSR_TSC_FREQUENCY);
 	TEST_ASSERT(tsc_freq > 0, "TSC frequency must be nonzero");
 
-	/* First, check MSR-based clocksource */
+	/* For increased accuracy, take mean rdtsc() before and afrer ioctl */
 	r1 = rdtsc();
-	t1 = vcpu_get_msr(vm, VCPU_ID, HV_X64_MSR_TIME_REF_COUNT);
+	t1 = vcpu_get_msr(vcpu, HV_X64_MSR_TIME_REF_COUNT);
+	r1 = (r1 + rdtsc()) / 2;
 	nop_loop();
 	r2 = rdtsc();
-	t2 = vcpu_get_msr(vm, VCPU_ID, HV_X64_MSR_TIME_REF_COUNT);
+	t2 = vcpu_get_msr(vcpu, HV_X64_MSR_TIME_REF_COUNT);
+	r2 = (r2 + rdtsc()) / 2;
 
 	TEST_ASSERT(t2 > t1, "Time reference MSR is not monotonic (%ld <= %ld)", t1, t2);
 
@@ -200,36 +205,36 @@ static void host_check_tsc_msr_rdtsc(struct kvm_vm *vm)
 
 int main(void)
 {
+	struct kvm_vcpu *vcpu;
 	struct kvm_vm *vm;
 	struct kvm_run *run;
 	struct ucall uc;
 	vm_vaddr_t tsc_page_gva;
 	int stage;
 
-	vm = vm_create_default(VCPU_ID, 0, guest_main);
-	run = vcpu_state(vm, VCPU_ID);
+	vm = vm_create_with_one_vcpu(&vcpu, guest_main);
+	run = vcpu->run;
 
-	vcpu_set_hv_cpuid(vm, VCPU_ID);
+	vcpu_set_hv_cpuid(vcpu);
 
-	tsc_page_gva = vm_vaddr_alloc(vm, getpagesize(), 0x10000, 0, 0);
-	memset(addr_gpa2hva(vm, tsc_page_gva), 0x0, getpagesize());
+	tsc_page_gva = vm_vaddr_alloc_page(vm);
+	memset(addr_gva2hva(vm, tsc_page_gva), 0x0, getpagesize());
 	TEST_ASSERT((addr_gva2gpa(vm, tsc_page_gva) & (getpagesize() - 1)) == 0,
 		"TSC page has to be page aligned\n");
-	vcpu_args_set(vm, VCPU_ID, 2, tsc_page_gva, addr_gva2gpa(vm, tsc_page_gva));
+	vcpu_args_set(vcpu, 2, tsc_page_gva, addr_gva2gpa(vm, tsc_page_gva));
 
-	host_check_tsc_msr_rdtsc(vm);
+	host_check_tsc_msr_rdtsc(vcpu);
 
 	for (stage = 1;; stage++) {
-		_vcpu_run(vm, VCPU_ID);
+		vcpu_run(vcpu);
 		TEST_ASSERT(run->exit_reason == KVM_EXIT_IO,
 			    "Stage %d: unexpected exit reason: %u (%s),\n",
 			    stage, run->exit_reason,
 			    exit_reason_str(run->exit_reason));
 
-		switch (get_ucall(vm, VCPU_ID, &uc)) {
+		switch (get_ucall(vcpu, &uc)) {
 		case UCALL_ABORT:
-			TEST_FAIL("%s at %s:%ld", (const char *)uc.args[0],
-				  __FILE__, uc.args[1]);
+			REPORT_GUEST_ASSERT(uc);
 			/* NOT REACHED */
 		case UCALL_SYNC:
 			break;

@@ -1136,11 +1136,9 @@ static int dsi_runtime_get(struct platform_device *dsidev)
 
 	DSSDBG("dsi_runtime_get\n");
 
-	r = pm_runtime_get_sync(&dsi->pdev->dev);
-	if (WARN_ON(r < 0)) {
-		pm_runtime_put_sync(&dsi->pdev->dev);
+	r = pm_runtime_resume_and_get(&dsi->pdev->dev);
+	if (WARN_ON(r < 0))
 		return r;
-	}
 	return 0;
 }
 
@@ -2375,8 +2373,6 @@ static int dsi_sync_vc(struct platform_device *dsidev, int channel)
 	struct dsi_data *dsi = dsi_get_dsidrv_data(dsidev);
 
 	WARN_ON(!dsi_bus_is_locked(dsidev));
-
-	WARN_ON(in_interrupt());
 
 	if (!dsi_vc_is_enabled(dsidev, channel))
 		return 0;

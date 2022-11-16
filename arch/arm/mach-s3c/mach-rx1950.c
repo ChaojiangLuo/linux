@@ -271,7 +271,6 @@ static int rx1950_led_blink_set(struct gpio_desc *desc, int state,
 		break;
 	default:
 		return -EINVAL;
-		break;
 	}
 
 	if (delay_on && delay_off && !*delay_on && !*delay_off)
@@ -383,6 +382,8 @@ static struct s3c2410fb_mach_info rx1950_lcd_cfg = {
 
 static struct pwm_lookup rx1950_pwm_lookup[] = {
 	PWM_LOOKUP("samsung-pwm", 0, "pwm-backlight.0", NULL, 48000,
+		   PWM_POLARITY_NORMAL),
+	PWM_LOOKUP("samsung-pwm", 1, "pwm-backlight.0", "RX1950 LCD", LCD_PWM_PERIOD,
 		   PWM_POLARITY_NORMAL),
 };
 
@@ -498,19 +499,18 @@ static void rx1950_bl_power(int enable)
 static int rx1950_backlight_init(struct device *dev)
 {
 	WARN_ON(gpio_request(S3C2410_GPB(0), "Backlight"));
-	lcd_pwm = pwm_request(1, "RX1950 LCD");
+	lcd_pwm = pwm_get(dev, "RX1950 LCD");
 	if (IS_ERR(lcd_pwm)) {
 		dev_err(dev, "Unable to request PWM for LCD power!\n");
 		return PTR_ERR(lcd_pwm);
 	}
 
 	/*
-	 * This is only required to initialize .polarity; all other values are
-	 * fixed in this driver.
+	 * Call pwm_init_state to initialize .polarity and .period. The other
+	 * values are fixed in this driver.
 	 */
 	pwm_init_state(lcd_pwm, &lcd_pwm_state);
 
-	lcd_pwm_state.period = LCD_PWM_PERIOD;
 	lcd_pwm_state.duty_cycle = LCD_PWM_DUTY;
 
 	rx1950_lcd_power(1);
@@ -524,7 +524,7 @@ static void rx1950_backlight_exit(struct device *dev)
 	rx1950_bl_power(0);
 	rx1950_lcd_power(0);
 
-	pwm_free(lcd_pwm);
+	pwm_put(lcd_pwm);
 	gpio_free(S3C2410_GPB(0));
 }
 
@@ -643,9 +643,15 @@ static struct s3c2410_platform_nand rx1950_nand_info = {
 };
 
 static struct s3c2410_udc_mach_info rx1950_udc_cfg __initdata = {
-	.vbus_pin = S3C2410_GPG(5),
-	.vbus_pin_inverted = 1,
-	.pullup_pin = S3C2410_GPJ(5),
+};
+
+static struct gpiod_lookup_table rx1950_udc_gpio_table = {
+	.dev_id = "s3c2410-usbgadget",
+	.table = {
+		GPIO_LOOKUP("GPIOG", 5, "vbus", GPIO_ACTIVE_LOW),
+		GPIO_LOOKUP("GPIOJ", 5, "pullup", GPIO_ACTIVE_HIGH),
+		{ },
+	},
 };
 
 static struct s3c2410_ts_mach_info rx1950_ts_cfg __initdata = {
@@ -847,6 +853,7 @@ static void __init rx1950_init_machine(void)
 	gpio_direction_output(S3C2410_GPJ(6), 0);
 
 	pwm_add_table(rx1950_pwm_lookup, ARRAY_SIZE(rx1950_pwm_lookup));
+	gpiod_add_lookup_table(&rx1950_udc_gpio_table);
 	gpiod_add_lookup_table(&rx1950_audio_gpio_table);
 	gpiod_add_lookup_table(&rx1950_bat_gpio_table);
 	/* Configure the I2S pins (GPE0...GPE4) in correct mode */
@@ -868,6 +875,7 @@ static void __init rx1950_reserve(void)
 MACHINE_START(RX1950, "HP iPAQ RX1950")
     /* Maintainers: Vasily Khoruzhick */
 	.atag_offset = 0x100,
+	.nr_irqs	= NR_IRQS_S3C2442,
 	.map_io = rx1950_map_io,
 	.reserve	= rx1950_reserve,
 	.init_irq	= s3c2442_init_irq,

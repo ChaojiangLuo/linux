@@ -2,7 +2,7 @@
 /*
  * Alienware AlienFX control
  *
- * Copyright (C) 2014 Dell Inc <mario_limonciello@dell.com>
+ * Copyright (C) 2014 Dell Inc <Dell.Client.Kernel@dell.com>
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -26,7 +26,7 @@
 #define WMAX_METHOD_DEEP_SLEEP_CONTROL	0x0B
 #define WMAX_METHOD_DEEP_SLEEP_STATUS	0x0C
 
-MODULE_AUTHOR("Mario Limonciello <mario_limonciello@dell.com>");
+MODULE_AUTHOR("Mario Limonciello <mario.limonciello@outlook.com>");
 MODULE_DESCRIPTION("Alienware special feature control");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("wmi:" LEGACY_CONTROL_GUID);
@@ -791,7 +791,7 @@ static int __init alienware_wmi_init(void)
 	ret = platform_driver_register(&platform_driver);
 	if (ret)
 		goto fail_platform_driver;
-	platform_device = platform_device_alloc("alienware-wmi", -1);
+	platform_device = platform_device_alloc("alienware-wmi", PLATFORM_DEVID_NONE);
 	if (!platform_device) {
 		ret = -ENOMEM;
 		goto fail_platform_device1;
